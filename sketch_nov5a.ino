@@ -47,8 +47,8 @@ int buttonStatuses[] = {
   LOW,  // 7
   LOW,  // 8
   LOW,  // 9
-  LOW,  // lock/unlock button --> if locked: submit; if unlocked: lock using old passcode
   LOW,  // undo button --> if locked: undo; if unlocked: reset combination; if in reset mode: submits the new combination
+  LOW,  // lock/unlock button --> if locked: submit; if unlocked: lock using old passcode -- A6
 };
 
 boolean buttonPressed[] = {
@@ -102,12 +102,14 @@ void setup() {
   pinMode(8, INPUT);
   pinMode(9, INPUT);
   pinMode(10, INPUT);
-  pinMode(11, INPUT);
+  pinMode(A6, INPUT);
 
   // myservo.attach(5);
   Serial.begin(9600);
   while (!Serial)
     ;
+
+  delay(5000);
 }
 
 void updateInputs() {
@@ -123,7 +125,7 @@ void updateInputs() {
     digitalRead(8),
     digitalRead(9),
     digitalRead(10),
-    digitalRead(11),
+    digitalRead(A6),
   };
 
   for (int i = 0; i <= 11; i++) {
@@ -134,10 +136,23 @@ void updateInputs() {
       buttonStatuses[i] = newStatus;
       Serial.print("Button ");
       Serial.print(i);
-      Serial.println(newStatus == HIGH ? " pressed" : "released");
+      Serial.println(newStatus == HIGH ? " pressed" : " released");
       buttonPressed[i] = newStatus == LOW;
     }
   }
+}
+
+void displayInitPasscode() {
+  Serial.print("Initial passcode: ");
+  Serial.println((const char*)currentPasscode);
+}
+
+void displayLocked() {
+  Serial.println("LOCKED");
+}
+
+void displayUnlocked() {
+  Serial.println("UNLOCKED");
 }
 
 void displayMaskedPasscode() {
@@ -150,19 +165,25 @@ void displayMaskedPasscode() {
   Serial.println();
 }
 
-void displayInitPasscode() {
-  Serial.print("Initial passcode: ");
+void displayPasswordChanged() {
+  Serial.print("Password changed!");
   Serial.println((const char*)currentPasscode);
 }
 
-void displayLocked() {
-  Serial.println("LOCKED");
+void displayEnterNewPasscode() {
+  Serial.print("New passcode: ");
+  Serial.println((const char*)enteredPasscode);
 }
 
-
 void updateEnteredPassword() {
+  // Check if the user can still enter buttons
   if (enteredPasscodeLength < maxLength) {
+    // Iterate over all buttons and check if they are pressed
     for (int i = 0; i <= 9; i++) {
+      if (i == 5) {
+        continue;
+      }
+
       if (buttonPressed[i]) {
         enteredPasscode[enteredPasscodeLength] = i + '0';
         enteredPasscodeLength++;
@@ -205,7 +226,30 @@ State updateFSM(State oldState) {
       // TODO: autolock after 30 seconds of inactivity
       return State::Unlocked;
     case State::ResetPasscode:
-      break;
+      // User can enter digits for the new passcode
+      updateEnteredPassword();
+      displayEnterNewPasscode();
+      if (buttonPressed[buttonLockUnlockPin]) {
+        // User can submit the passcode
+        if (enteredPasscodeLength > 0) {
+          // Allow this to be the new passcode
+          // Copy the entered passcode to the current passcode
+          strcpy(currentPasscode, enteredPasscode);
+          passcodeLength = strlen(currentPasscode);
+          // Reset the entered passcode
+          enteredPasscodeLength = 0;
+          memset(enteredPasscode, 0, maxLength + 1);
+          displayPasswordChanged();
+          return State::Locked;
+        }
+      } else if (buttonPressed[buttonUndoButtonPin]) {
+        // User can press undo button to exit reset passcode state --> goes to unlocked
+        enteredPasscodeLength = 0;
+        memset(enteredPasscode, 0, maxLength + 1);
+        displayUnlocked();
+        return State::Unlocked;
+      }
+      return State::ResetPasscode;
     case State::WaitForButton:
       updateEnteredPassword();
       if (buttonPressed[buttonLockUnlockPin]) {
