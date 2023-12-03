@@ -95,6 +95,7 @@ constexpr int button9Pin = 9;
 constexpr int buttonLockUnlockPin = 10;
 constexpr int buttonUndoButtonPin = 11;
 
+
 constexpr int rs = A0, en = A1, d4 = A2, d5 = A3, d6 = A4, d7 = A5;
 LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
 
@@ -162,7 +163,7 @@ void setup() {
   pinMode(10, INPUT);
   pinMode(A6, INPUT);
 
-  // myservo.attach(5);
+  myservo.attach(11);
   Serial.begin(9600);
   while (!Serial)
     ;
@@ -243,7 +244,6 @@ void displayAutoReset() {
   lcd.setCursor(0,0);
   lcd.print("AUTO-RESETTING...");
 }
-
 
 void displayLocked() {
   Serial.println("LOCKED");
@@ -375,14 +375,20 @@ void disableTimeoutTimer() {
 State updateFSM(State oldState) {
   switch (oldState) {
     case State::Init:
+      // Turn Servo Motor to lock it
+      myservo.write(0);
       displayInitPasscode();
       return State::Locked;
     case State::Locked:
+      // Turn Servo Motor to lock it
+      myservo.write(0);
       lastUnlockedTime = millis();
       lastResetTime = millis();
       displayLocked();
       return State::WaitForButton;
     case State::Unlocked:
+      // Turn Servo Motor
+      myservo.write(180);
       if (buttonPressed[buttonLockUnlockPin]) {
         // User presses lock button
         lockedState = true;
