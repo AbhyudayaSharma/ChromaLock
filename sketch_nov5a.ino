@@ -1,13 +1,13 @@
 #include <Servo.h>
+#include <LiquidCrystal.h>
 
 Servo myservo;
-
-const int autoLockTimeout = 30;
-bool autoLockInterrupt = false;
 
 constexpr int maxLength = 10;
 int passcodeLength = 4;
 int enteredPasscodeLength = 0;
+
+
 char enteredPasscode[maxLength + 1] = {
   0,
   0,
@@ -22,7 +22,7 @@ char enteredPasscode[maxLength + 1] = {
   0,
 };
 
-char currentPasscode[11] = {
+char currentPasscode[maxLength + 1] = {
   '0',
   '0',
   '0',
@@ -76,6 +76,11 @@ enum State {
   ResetPasscode,
 };
 
+const int autoLockLimit = 30000;
+const int autoResetLimit = 30000;
+int lastUnlockedTime = millis();
+int lastResetTime = millis();
+
 constexpr int button0Pin = 0;
 constexpr int button1Pin = 1;
 constexpr int button2Pin = 2;
@@ -88,6 +93,10 @@ constexpr int button8Pin = 8;
 constexpr int button9Pin = 9;
 constexpr int buttonLockUnlockPin = 10;
 constexpr int buttonUndoButtonPin = 11;
+
+constexpr int rs = A0, en = A1, d4 = A2, d5 = A3, d6 = A4, d7 = A5;
+LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
+
 
 void setup() {
   // put your setup code here, to run once:
@@ -109,7 +118,51 @@ void setup() {
   while (!Serial)
     ;
 
-  delay(5000);
+  // Clear and enable WDT
+  NVIC_DisableIRQ(WDT_IRQn);
+  NVIC_ClearPendingIRQ(WDT_IRQn);
+  NVIC_SetPriority(WDT_IRQn, 0);
+  NVIC_EnableIRQ(WDT_IRQn);
+
+  // Configure and enable WDT GCLK:
+  GCLK->GENDIV.reg = GCLK_GENDIV_DIV(4) | GCLK_GENDIV_ID(5);
+  while (GCLK->STATUS.bit.SYNCBUSY)
+    ;
+  // set GCLK->GENCTRL.reg and GCLK->CLKCTRL.reg
+  GCLK->GENCTRL.reg = GCLK_GENCTRL_DIVSEL | GCLK_GENCTRL_GENEN | GCLK_GENCTRL_ID(0x5) | GCLK_GENCTRL_SRC(3);
+  while (GCLK->STATUS.bit.SYNCBUSY)
+    ;
+
+  WDT->CONFIG.reg = WDT_CONFIG_PER(0xA);
+  while (WDT->STATUS.bit.SYNCBUSY)
+    ;
+
+  WDT->EWCTRL.reg = WDT_EWCTRL_EWOFFSET(0x9);
+
+  WDT->CTRL.reg = WDT_CTRL_ENABLE;
+  while (WDT->STATUS.bit.SYNCBUSY)
+    ;
+
+  WDT->INTENSET.reg = WDT_INTENSET_EW;
+
+  lcd.begin(16,2);
+}
+
+
+void resetAllInputs() {
+  memset(enteredPasscode, 0, maxLength + 1);
+  enteredPasscodeLength = 0;
+
+  memset(currentPasscode, 0, maxLength + 1);
+
+  for (int i = 0; i < 4; i++) {
+    currentPasscode[i] = '0';
+  }
+  passcodeLength = 4;
+
+  memset(buttonPressed, false, 12);
+  memset(buttonStatuses, LOW, 12);
+  lockedState = true;
 }
 
 void updateInputs() {
@@ -142,17 +195,64 @@ void updateInputs() {
   }
 }
 
+void petWatchdog() {
+  WDT->CLEAR.reg = WDT_CLEAR_CLEAR(0xA5);
+}
+
 void displayInitPasscode() {
   Serial.print("Initial passcode: ");
   Serial.println((const char*)currentPasscode);
+
+  lcd.setCursor(0,0);
+  lcd.print("INITIAL PASSCODE");
+  lcd.setCursor(0,1);
+  lcd.print((const char*) currentPasscode);
+  
+  for (int i = 0; i < 10; i++) {
+    delay(100);
+    petWatchdog();
+  }
 }
+
+void displayAutoLocked() {
+  Serial.println("AUTOLOCKING TIMEOUT");
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("AUTO-LOCKING...");
+}
+
+void displayAutoReset() {
+  Serial.println("AUTORESET TIMEOUT");
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("AUTO-RESETTING...");
+}
+
 
 void displayLocked() {
   Serial.println("LOCKED");
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("LOCKED!");
 }
 
 void displayUnlocked() {
   Serial.println("UNLOCKED");
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("UNLOCKED!");
+}
+
+void displayWrongPasscode() {
+  Serial.println("WRONG PASSCODE");
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("WRONG PASSCODE!");
+
+  for (int i = 0; i < 10; i++) {
+    delay(100);
+    petWatchdog();
+  }
 }
 
 void displayMaskedPasscode() {
@@ -163,16 +263,64 @@ void displayMaskedPasscode() {
     i++;
   }
   Serial.println();
+
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("PASSCODE:");
+  lcd.setCursor(0,1);
+  char* j = enteredPasscode;
+  int counter = 0;
+  while (*j) {
+    lcd.print("*");
+    j++;
+    counter ++;
+  }
 }
 
 void displayPasswordChanged() {
   Serial.print("Password changed!");
   Serial.println((const char*)currentPasscode);
+
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("PASSWORD CHANGED");
+
+  for (int i = 0; i < 10; i++) {
+    delay(100);
+    petWatchdog();
+  }
 }
 
 void displayEnterNewPasscode() {
   Serial.print("New passcode: ");
   Serial.println((const char*)enteredPasscode);
+
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("NEW PASSCODE:");
+
+  lcd.setCursor(0,1);
+  char* j = enteredPasscode;
+  int counter = 0;
+  while (*j) {
+    lcd.print(*j);
+    j++;
+    counter++;
+  }
+}
+
+void displayNewPasswordEmptyError() {
+  Serial.print("New passcode cannot be empty!");
+
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("NEW PASSCODE");
+  lcd.setCursor(0,1);
+  lcd.print("CANNOT BE EMPTY");
+  for (int i = 0; i < 10; i++) {
+    delay(100);
+    petWatchdog();
+  }
 }
 
 void updateEnteredPassword() {
@@ -205,6 +353,8 @@ State updateFSM(State oldState) {
       displayInitPasscode();
       return State::Locked;
     case State::Locked:
+      lastUnlockedTime = millis();
+      lastResetTime = millis();
       displayLocked();
       return State::WaitForButton;
     case State::Unlocked:
@@ -216,10 +366,14 @@ State updateFSM(State oldState) {
         return State::Locked;
       } else if (buttonPressed[buttonUndoButtonPin]) {
         // User presses undo --> enters reset state
+        lastResetTime = millis();
         disableTimeoutTimer();
         return State::ResetPasscode;
-      } else if (autoLockInterrupt) {
+      } else if (millis() - lastUnlockedTime > autoLockLimit) {
         // Autolock after 30 seconds of inactivity
+        lockedState = true;
+        displayAutoLocked();
+        displayLocked();
         disableTimeoutTimer();
         return State::Locked;
       }
@@ -229,6 +383,9 @@ State updateFSM(State oldState) {
       // User can enter digits for the new passcode
       updateEnteredPassword();
       displayEnterNewPasscode();
+
+      lastUnlockedTime = millis();
+
       if (buttonPressed[buttonLockUnlockPin]) {
         // User can submit the passcode
         if (enteredPasscodeLength > 0) {
@@ -236,18 +393,27 @@ State updateFSM(State oldState) {
           // Copy the entered passcode to the current passcode
           strcpy(currentPasscode, enteredPasscode);
           passcodeLength = strlen(currentPasscode);
-          // Reset the entered passcode
-          enteredPasscodeLength = 0;
           memset(enteredPasscode, 0, maxLength + 1);
+          enteredPasscodeLength = 0;
+          // Reset the entered passcode
           displayPasswordChanged();
           return State::Locked;
+        } else {
+          displayNewPasswordEmptyError();
+          return State::ResetPasscode;
         }
       } else if (buttonPressed[buttonUndoButtonPin]) {
         // User can press undo button to exit reset passcode state --> goes to unlocked
         enteredPasscodeLength = 0;
         memset(enteredPasscode, 0, maxLength + 1);
+        lastResetTime = millis();
         displayUnlocked();
         return State::Unlocked;
+      } else if (millis() - lastResetTime > autoResetLimit) {
+        resetAllInputs();
+        displayAutoReset();
+        displayInitPasscode();
+        return State::Init;
       }
       return State::ResetPasscode;
     case State::WaitForButton:
@@ -261,12 +427,13 @@ State updateFSM(State oldState) {
         // Check if combination is correct
         if (correctCombination) {
           lockedState = false;
-          Serial.println("UNLOCKED");
+          lastUnlockedTime = millis();
+          displayUnlocked();
           enableTimeoutTimer();
           return State::Unlocked;
         }
         // Incorrect combination
-        Serial.println("INCORRECT PASSCODE");
+        displayWrongPasscode();
         return State::Locked;
       } else if (buttonPressed[buttonUndoButtonPin]) {
         // Check if there is a passcode entered
@@ -280,6 +447,11 @@ State updateFSM(State oldState) {
       } else if (enteredPasscodeLength > 0) {
         displayMaskedPasscode();
       }
+
+      if (lockedState) {
+        lastUnlockedTime = millis();
+      }
+
       return State::WaitForButton;
     default:
       Serial.println("ERROR: Unknown state");
@@ -290,11 +462,17 @@ State updateFSM(State oldState) {
 void loop() {
   // put your main code here, to run repeatedly:
   static State state = State::Init;
-
+  petWatchdog();
   updateInputs();
   state = updateFSM(state);
-
-  // myservo.write(isButtonPressed == HIGH ? 180 : 0);
-  // TODO pet watchdog
   delay(100);
+}
+
+void WDT_Handler() {
+  // Clear interrupt register flag
+  // (reference register with WDT->registername.reg)
+  WDT->INTFLAG.bit.EW = 1;
+
+  // Warn user that a watchdog reset may happen
+  Serial.println("Warning: Watchdog reset may occur.");
 }
