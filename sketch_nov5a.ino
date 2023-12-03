@@ -6,7 +6,8 @@ Servo myservo;
 constexpr int maxLength = 10;
 int passcodeLength = 4;
 int enteredPasscodeLength = 0;
-
+const int CLOCKFREQUENCY = 4 * 1000 * 1000;
+int timerInterruptCount = 0;
 
 char enteredPasscode[maxLength + 1] = {
   0,
@@ -98,27 +99,26 @@ constexpr int rs = A0, en = A1, d4 = A2, d5 = A3, d6 = A4, d7 = A5;
 LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
 
 
-void setup() {
-  // put your setup code here, to run once:
-  pinMode(0, INPUT);
-  pinMode(1, INPUT);
-  pinMode(2, INPUT);
-  pinMode(3, INPUT);
-  pinMode(4, INPUT);
-  pinMode(5, INPUT);
-  pinMode(6, INPUT);
-  pinMode(7, INPUT);
-  pinMode(8, INPUT);
-  pinMode(9, INPUT);
-  pinMode(10, INPUT);
-  pinMode(A6, INPUT);
+void setupTimer() {
+  GCLK->GENDIV.reg = GCLK_GENDIV_DIV(0) | GCLK_GENDIV_ID(4); // do not divide gclk 4
 
-  // myservo.attach(5);
-  Serial.begin(9600);
-  while (!Serial)
-    ;
+  while(GCLK->STATUS.bit.SYNCBUSY);
 
-  // Clear and enable WDT
+  // use GCLK->GENCTRL.reg and GCLK->CLKCTRL.reg
+  GCLK->GENCTRL.reg = GCLK_GENCTRL_GENEN | GCLK_GENCTRL_ID(4) | GCLK_GENCTRL_IDC | GCLK_GENCTRL_SRC(6);
+  GCLK->CLKCTRL.reg = GCLK_CLKCTRL_CLKEN | GCLK_CLKCTRL_GEN(4) | GCLK_CLKCTRL_ID_TCC2_TC3;
+  while(GCLK->STATUS.bit.SYNCBUSY); // write-synchronized
+
+  TC3->COUNT16.CTRLA.reg &= ~(TC_CTRLA_ENABLE);
+  TC3->COUNT16.INTENCLR.reg |= TC_INTENCLR_MC0;
+  while(TC3->COUNT16.STATUS.bit.SYNCBUSY); // write-synchronized
+
+  NVIC_SetPriority(TC3_IRQn, 0);
+  NVIC_EnableIRQ(TC3_IRQn);
+}
+
+void setupWatchdogTimer() {
+// Clear and enable WDT
   NVIC_DisableIRQ(WDT_IRQn);
   NVIC_ClearPendingIRQ(WDT_IRQn);
   NVIC_SetPriority(WDT_IRQn, 0);
@@ -145,24 +145,40 @@ void setup() {
 
   WDT->INTENSET.reg = WDT_INTENSET_EW;
 
-  lcd.begin(16,2);
 }
 
+void setup() {
+  // put your setup code here, to run once:
+  pinMode(0, INPUT);
+  pinMode(1, INPUT);
+  pinMode(2, INPUT);
+  pinMode(3, INPUT);
+  pinMode(4, INPUT);
+  pinMode(5, INPUT);
+  pinMode(6, INPUT);
+  pinMode(7, INPUT);
+  pinMode(8, INPUT);
+  pinMode(9, INPUT);
+  pinMode(10, INPUT);
+  pinMode(A6, INPUT);
 
-void resetAllInputs() {
-  memset(enteredPasscode, 0, maxLength + 1);
-  enteredPasscodeLength = 0;
+  // myservo.attach(5);
+  Serial.begin(9600);
+  while (!Serial)
+    ;
 
-  memset(currentPasscode, 0, maxLength + 1);
+  lcd.begin(16,2);
 
-  for (int i = 0; i < 4; i++) {
-    currentPasscode[i] = '0';
-  }
-  passcodeLength = 4;
+  setupTimer();
+  setupWatchdogTimer();
+}
 
-  memset(buttonPressed, false, 12);
-  memset(buttonStatuses, LOW, 12);
-  lockedState = true;
+void TC3_Handler() {
+  // Clear interrupt register flag
+  // (use register TC3->COUNT16.registername.reg)
+  TC3->COUNT16.INTFLAG.reg |= TC_INTFLAG_MC0;
+  Serial.println("Timer interrupt");
+  timerInterruptCount++;
 }
 
 void updateInputs() {
@@ -342,9 +358,18 @@ void updateEnteredPassword() {
 }
 
 void enableTimeoutTimer() {
+  timerInterruptCount = 0;
+  TC3->COUNT16.INTENCLR.reg |= TC_INTENCLR_MC0;
+  TC3->COUNT16.CC[0].reg = 0xffffffff;
+  TC3->COUNT16.CTRLA.reg = TC_CTRLA_MODE_COUNT16 | TC_CTRLA_WAVEGEN(1) | TC_CTRLA_PRESCALER(7) | TC_CTRLA_PRESCSYNC(1);
+  TC3->COUNT16.CTRLA.reg |= TC_CTRLA_ENABLE;
+  TC3->COUNT16.INTENSET.reg |= TC_INTENSET_MC0;
+  while(TC3->COUNT16.STATUS.bit.SYNCBUSY); // write-synchronized
 }
 
 void disableTimeoutTimer() {
+  TC3->COUNT16.INTENCLR.reg |= TC_INTENCLR_MC0;
+  timerInterruptCount = 0;
 }
 
 State updateFSM(State oldState) {
@@ -368,16 +393,16 @@ State updateFSM(State oldState) {
         // User presses undo --> enters reset state
         lastResetTime = millis();
         disableTimeoutTimer();
+        enableTimeoutTimer();
         return State::ResetPasscode;
-      } else if (millis() - lastUnlockedTime > autoLockLimit) {
-        // Autolock after 30 seconds of inactivity
+      } else if (timerInterruptCount >= 4) {
+        // Autolock after ~ (8.5*4) = 34 seconds of inactivity
         lockedState = true;
         displayAutoLocked();
         displayLocked();
         disableTimeoutTimer();
         return State::Locked;
       }
-      // TODO: autolock after 30 seconds of inactivity
       return State::Unlocked;
     case State::ResetPasscode:
       // User can enter digits for the new passcode
@@ -397,20 +422,26 @@ State updateFSM(State oldState) {
           enteredPasscodeLength = 0;
           // Reset the entered passcode
           displayPasswordChanged();
+          disableTimeoutTimer();
           return State::Locked;
         } else {
           displayNewPasswordEmptyError();
+          enableTimeoutTimer();
           return State::ResetPasscode;
         }
       } else if (buttonPressed[buttonUndoButtonPin]) {
         // User can press undo button to exit reset passcode state --> goes to unlocked
+        disableTimeoutTimer();
         enteredPasscodeLength = 0;
         memset(enteredPasscode, 0, maxLength + 1);
         lastResetTime = millis();
         displayUnlocked();
+        enableTimeoutTimer();
         return State::Unlocked;
-      } else if (millis() - lastResetTime > autoResetLimit) {
-        resetAllInputs();
+      } else if (timerInterruptCount >= 4) {
+        disableTimeoutTimer();
+        enteredPasscodeLength = 0;
+        memset(enteredPasscode, 0, maxLength + 1);
         displayAutoReset();
         displayInitPasscode();
         return State::Init;
@@ -460,7 +491,6 @@ State updateFSM(State oldState) {
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
   static State state = State::Init;
   petWatchdog();
   updateInputs();
