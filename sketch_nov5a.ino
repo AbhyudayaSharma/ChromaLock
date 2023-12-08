@@ -8,6 +8,9 @@ int passcodeLength = 4;
 int enteredPasscodeLength = 0;
 const int CLOCKFREQUENCY = 4 * 1000 * 1000;
 int timerInterruptCount = 0;
+const int redLedPin = 0;
+const int greenLedPin = A3;
+const int blueLedPin = A4;
 
 char enteredPasscode[maxLength + 1] = {
   0,
@@ -96,7 +99,7 @@ constexpr int buttonLockUnlockPin = 10;
 constexpr int buttonUndoButtonPin = 11;
 
 
-constexpr int rs = A0, en = A1, d4 = A2, d5 = A3, d6 = A4, d7 = A5;
+constexpr int rs = A0, en = A1, d4 = A2, d5 = 12, d6 = 13, d7 = 14;
 LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
 
 
@@ -150,7 +153,7 @@ void setupWatchdogTimer() {
 
 void setup() {
   // put your setup code here, to run once:
-  pinMode(0, INPUT);
+  pinMode(0, OUTPUT);
   pinMode(1, INPUT);
   pinMode(2, INPUT);
   pinMode(3, INPUT);
@@ -162,6 +165,9 @@ void setup() {
   pinMode(9, INPUT);
   pinMode(10, INPUT);
   pinMode(A6, INPUT);
+  pinMode(A5, INPUT);
+  pinMode(A3, OUTPUT);
+  pinMode(A4, OUTPUT);
 
   myservo.attach(11);
   Serial.begin(9600);
@@ -184,7 +190,7 @@ void TC3_Handler() {
 
 void updateInputs() {
   int newStatuses[12] = {
-    digitalRead(0),
+    digitalRead(A5),
     digitalRead(1),
     digitalRead(2),
     digitalRead(3),
@@ -372,21 +378,30 @@ void disableTimeoutTimer() {
   timerInterruptCount = 0;
 }
 
+void setLedColour(int red, int green, int blue) {
+  // analogWrite(redLedPin, red);
+  analogWrite(blueLedPin, blue);
+  analogWrite(greenLedPin, green);
+}
+
 State updateFSM(State oldState) {
   switch (oldState) {
     case State::Init:
       // Turn Servo Motor to lock it
+      setLedColour(0, 0, 255);
       myservo.write(0);
       displayInitPasscode();
       return State::Locked;
     case State::Locked:
       // Turn Servo Motor to lock it
+      setLedColour(0, 0, 255);
       myservo.write(0);
       lastUnlockedTime = millis();
       lastResetTime = millis();
       displayLocked();
       return State::WaitForButton;
     case State::Unlocked:
+      setLedColour(0, 255, 0);
       // Turn Servo Motor
       myservo.write(180);
       if (buttonPressed[buttonLockUnlockPin]) {
@@ -414,6 +429,7 @@ State updateFSM(State oldState) {
       // User can enter digits for the new passcode
       updateEnteredPassword();
       displayEnterNewPasscode();
+      setLedColour(0, 128, 255);
 
       lastUnlockedTime = millis();
 
@@ -468,10 +484,13 @@ State updateFSM(State oldState) {
           lastUnlockedTime = millis();
           displayUnlocked();
           enableTimeoutTimer();
+          myservo.write(180);
+          setLedColour(0, 255, 0);
           return State::Unlocked;
         }
         // Incorrect combination
         displayWrongPasscode();
+        setLedColour(0, 0, 255);
         return State::Locked;
       } else if (buttonPressed[buttonUndoButtonPin]) {
         // Check if there is a passcode entered
@@ -481,8 +500,10 @@ State updateFSM(State oldState) {
           enteredPasscode[enteredPasscodeLength] = 0;
         }
       } else if (enteredPasscodeLength == 0) {
+        setLedColour(0, 0, 255);
         displayLocked();
       } else if (enteredPasscodeLength > 0) {
+        setLedColour(255, 255, 255);
         displayMaskedPasscode();
       }
 
