@@ -350,10 +350,6 @@ void updateEnteredPassword() {
   if (enteredPasscodeLength < maxLength) {
     // Iterate over all buttons and check if they are pressed
     for (int i = 0; i <= 9; i++) {
-      if (i == 5) {
-        continue;
-      }
-
       if (buttonPressed[i]) {
         enteredPasscode[enteredPasscodeLength] = i + '0';
         enteredPasscodeLength++;
