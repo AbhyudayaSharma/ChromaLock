@@ -449,8 +449,9 @@ State updateFSM(State oldState) {
         enteredPasscodeLength = 0;
         memset(enteredPasscode, 0, maxLength + 1);
         displayAutoReset();
-        displayInitPasscode();
-        return State::Init;
+        displayUnlocked();
+        enableTimeoutTimer();
+        return State::Unlocked;
       }
       return State::ResetPasscode;
     case State::WaitForButton:
@@ -501,7 +502,7 @@ void loop() {
   petWatchdog();
   updateInputs();
   state = updateFSM(state);
-  delay(100);
+  delay(50);
 }
 
 void WDT_Handler() {
