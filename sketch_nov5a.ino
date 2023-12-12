@@ -7,7 +7,7 @@ constexpr int maxLength = 10;
 int passcodeLength = 4;
 int enteredPasscodeLength = 0;
 const int CLOCKFREQUENCY = 4 * 1000 * 1000;
-int timerInterruptCount = 0;
+volatile int timerInterruptCount = 0;
 const int redLedPin = 0;
 const int greenLedPin = A3;
 const int blueLedPin = A4;
@@ -104,25 +104,28 @@ LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
 
 
 void setupTimer() {
-  GCLK->GENDIV.reg = GCLK_GENDIV_DIV(0) | GCLK_GENDIV_ID(4); // do not divide gclk 4
+  GCLK->GENDIV.reg = GCLK_GENDIV_DIV(0) | GCLK_GENDIV_ID(4);  // do not divide gclk 4
 
-  while(GCLK->STATUS.bit.SYNCBUSY);
+  while (GCLK->STATUS.bit.SYNCBUSY)
+    ;
 
   // use GCLK->GENCTRL.reg and GCLK->CLKCTRL.reg
   GCLK->GENCTRL.reg = GCLK_GENCTRL_GENEN | GCLK_GENCTRL_ID(4) | GCLK_GENCTRL_IDC | GCLK_GENCTRL_SRC(6);
   GCLK->CLKCTRL.reg = GCLK_CLKCTRL_CLKEN | GCLK_CLKCTRL_GEN(4) | GCLK_CLKCTRL_ID_TCC2_TC3;
-  while(GCLK->STATUS.bit.SYNCBUSY); // write-synchronized
+  while (GCLK->STATUS.bit.SYNCBUSY)
+    ;  // write-synchronized
 
   TC3->COUNT16.CTRLA.reg &= ~(TC_CTRLA_ENABLE);
   TC3->COUNT16.INTENCLR.reg |= TC_INTENCLR_MC0;
-  while(TC3->COUNT16.STATUS.bit.SYNCBUSY); // write-synchronized
+  while (TC3->COUNT16.STATUS.bit.SYNCBUSY)
+    ;  // write-synchronized
 
   NVIC_SetPriority(TC3_IRQn, 0);
   NVIC_EnableIRQ(TC3_IRQn);
 }
 
 void setupWatchdogTimer() {
-// Clear and enable WDT
+  // Clear and enable WDT
   NVIC_DisableIRQ(WDT_IRQn);
   NVIC_ClearPendingIRQ(WDT_IRQn);
   NVIC_SetPriority(WDT_IRQn, 0);
@@ -148,7 +151,6 @@ void setupWatchdogTimer() {
     ;
 
   WDT->INTENSET.reg = WDT_INTENSET_EW;
-
 }
 
 void setup() {
@@ -174,7 +176,7 @@ void setup() {
   while (!Serial)
     ;
 
-  lcd.begin(16,2);
+  lcd.begin(16, 2);
 
   setupTimer();
   setupWatchdogTimer();
@@ -226,13 +228,13 @@ void displayInitPasscode() {
   Serial.print("Initial passcode: ");
   Serial.println((const char*)currentPasscode);
 
-  lcd.setCursor(0,0);
+  lcd.setCursor(0, 0);
   lcd.print("INITIAL PASSCODE");
-  lcd.setCursor(0,1);
-  lcd.print((const char*) currentPasscode);
-  
+  lcd.setCursor(0, 1);
+  lcd.print((const char*)currentPasscode);
+
   for (int i = 0; i < 10; i++) {
-    delay(100);
+    delay(50);
     petWatchdog();
   }
 }
@@ -240,35 +242,35 @@ void displayInitPasscode() {
 void displayAutoLocked() {
   Serial.println("AUTOLOCKING TIMEOUT");
   lcd.clear();
-  lcd.setCursor(0,0);
+  lcd.setCursor(0, 0);
   lcd.print("AUTO-LOCKING...");
 }
 
 void displayAutoReset() {
   Serial.println("AUTORESET TIMEOUT");
   lcd.clear();
-  lcd.setCursor(0,0);
+  lcd.setCursor(0, 0);
   lcd.print("AUTO-RESETTING...");
 }
 
 void displayLocked() {
   Serial.println("LOCKED");
   lcd.clear();
-  lcd.setCursor(0,0);
+  lcd.setCursor(0, 0);
   lcd.print("LOCKED!");
 }
 
 void displayUnlocked() {
   Serial.println("UNLOCKED");
   lcd.clear();
-  lcd.setCursor(0,0);
+  lcd.setCursor(0, 0);
   lcd.print("UNLOCKED!");
 }
 
 void displayWrongPasscode() {
   Serial.println("WRONG PASSCODE");
   lcd.clear();
-  lcd.setCursor(0,0);
+  lcd.setCursor(0, 0);
   lcd.print("WRONG PASSCODE!");
 
   for (int i = 0; i < 10; i++) {
@@ -287,15 +289,15 @@ void displayMaskedPasscode() {
   Serial.println();
 
   lcd.clear();
-  lcd.setCursor(0,0);
+  lcd.setCursor(0, 0);
   lcd.print("PASSCODE:");
-  lcd.setCursor(0,1);
+  lcd.setCursor(0, 1);
   char* j = enteredPasscode;
   int counter = 0;
   while (*j) {
     lcd.print("*");
     j++;
-    counter ++;
+    counter++;
   }
 }
 
@@ -304,7 +306,7 @@ void displayPasswordChanged() {
   Serial.println((const char*)currentPasscode);
 
   lcd.clear();
-  lcd.setCursor(0,0);
+  lcd.setCursor(0, 0);
   lcd.print("PASSWORD CHANGED");
 
   for (int i = 0; i < 10; i++) {
@@ -318,10 +320,10 @@ void displayEnterNewPasscode() {
   Serial.println((const char*)enteredPasscode);
 
   lcd.clear();
-  lcd.setCursor(0,0);
+  lcd.setCursor(0, 0);
   lcd.print("NEW PASSCODE:");
 
-  lcd.setCursor(0,1);
+  lcd.setCursor(0, 1);
   char* j = enteredPasscode;
   int counter = 0;
   while (*j) {
@@ -335,9 +337,9 @@ void displayNewPasswordEmptyError() {
   Serial.print("New passcode cannot be empty!");
 
   lcd.clear();
-  lcd.setCursor(0,0);
+  lcd.setCursor(0, 0);
   lcd.print("NEW PASSCODE");
-  lcd.setCursor(0,1);
+  lcd.setCursor(0, 1);
   lcd.print("CANNOT BE EMPTY");
   for (int i = 0; i < 10; i++) {
     delay(100);
@@ -366,7 +368,8 @@ void enableTimeoutTimer() {
   TC3->COUNT16.CTRLA.reg = TC_CTRLA_MODE_COUNT16 | TC_CTRLA_WAVEGEN(1) | TC_CTRLA_PRESCALER(7) | TC_CTRLA_PRESCSYNC(1);
   TC3->COUNT16.CTRLA.reg |= TC_CTRLA_ENABLE;
   TC3->COUNT16.INTENSET.reg |= TC_INTENSET_MC0;
-  while(TC3->COUNT16.STATUS.bit.SYNCBUSY); // write-synchronized
+  while (TC3->COUNT16.STATUS.bit.SYNCBUSY)
+    ;  // write-synchronized
 }
 
 void disableTimeoutTimer() {
