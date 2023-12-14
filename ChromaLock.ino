@@ -1,6 +1,9 @@
 #include <Servo.h>
 #include <LiquidCrystal.h>
 
+// uncomment the line below to run tests
+// #define TESTING
+
 Servo myservo;
 
 constexpr int maxLength = 10;
@@ -12,6 +15,7 @@ const int redLedPin = 0;
 const int greenLedPin = A3;
 const int blueLedPin = A4;
 
+// entered passcode
 char enteredPasscode[maxLength + 1] = {
   0,
   0,
@@ -26,6 +30,7 @@ char enteredPasscode[maxLength + 1] = {
   0,
 };
 
+// current passcode
 char currentPasscode[maxLength + 1] = {
   '0',
   '0',
@@ -40,6 +45,7 @@ char currentPasscode[maxLength + 1] = {
   0,
 };
 
+// button status -- high or low
 int buttonStatuses[] = {
   LOW,  // 0
   LOW,  // 1
@@ -55,6 +61,7 @@ int buttonStatuses[] = {
   LOW,  // lock/unlock button --> if locked: submit; if unlocked: lock using old passcode -- A6
 };
 
+// Button pressed status -- true only when a button was released
 boolean buttonPressed[] = {
   false,
   false,
@@ -72,6 +79,7 @@ boolean buttonPressed[] = {
 
 boolean lockedState = true;
 
+// States for the FSM
 enum State {
   Init,
   Locked,
@@ -98,12 +106,15 @@ constexpr int button9Pin = 9;
 constexpr int buttonLockUnlockPin = 10;
 constexpr int buttonUndoButtonPin = 11;
 
-
 constexpr int rs = A0, en = A1, d4 = A2, d5 = 12, d6 = 13, d7 = 14;
 LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
 
-
+// This function setups the TC3 timer
+// Inputs: none
+// Outputs: none
+// Side effects: setups the TC3 timer
 void setupTimer() {
+#ifndef TESTING
   GCLK->GENDIV.reg = GCLK_GENDIV_DIV(0) | GCLK_GENDIV_ID(4);  // do not divide gclk 4
 
   while (GCLK->STATUS.bit.SYNCBUSY)
@@ -122,9 +133,15 @@ void setupTimer() {
 
   NVIC_SetPriority(TC3_IRQn, 0);
   NVIC_EnableIRQ(TC3_IRQn);
+#endif
 }
 
+// This function setups the Watchdog timer.
+// Inputs: none
+// Outputs: none
+// Side effects: setups the watchdog timer
 void setupWatchdogTimer() {
+#ifndef TESTING
   // Clear and enable WDT
   NVIC_DisableIRQ(WDT_IRQn);
   NVIC_ClearPendingIRQ(WDT_IRQn);
@@ -151,8 +168,14 @@ void setupWatchdogTimer() {
     ;
 
   WDT->INTENSET.reg = WDT_INTENSET_EW;
+#endif
 }
 
+// This function sets every pin to the correct mode, setups Watchdog and TC3 timers,
+// servo motor, and the LCD display.
+// Inputs: none
+// Outputs: none
+// Side effects: sets up pin modes, lcd display and timers
 void setup() {
   // put your setup code here, to run once:
   pinMode(0, OUTPUT);
@@ -182,14 +205,24 @@ void setup() {
   setupWatchdogTimer();
 }
 
+// This function is the ISR for the TC3 timer
+// Inputs: none
+// Outputs: timerInterruptCount is incremented by one
+// Side effects: intflag is reset
 void TC3_Handler() {
+#ifndef TESTING
   // Clear interrupt register flag
   // (use register TC3->COUNT16.registername.reg)
   TC3->COUNT16.INTFLAG.reg |= TC_INTFLAG_MC0;
   Serial.println("Timer interrupt");
   timerInterruptCount++;
+#endif
 }
 
+// This function reads button statuses using digitalRead and updates buttonStatuses.
+// Inputs: button statuses (high or low)
+// Outputs: none
+// Side effects: buttonStatuses is updated with values read using digitalRead
 void updateInputs() {
   int newStatuses[12] = {
     digitalRead(A5),
@@ -220,10 +253,20 @@ void updateInputs() {
   }
 }
 
+// This function sets the watchdog.
+// Inputs: none
+// Outputs: none
+// Side effects: the watchdog is petted
 void petWatchdog() {
+#ifndef TESTING
   WDT->CLEAR.reg = WDT_CLEAR_CLEAR(0xA5);
+#endif
 }
 
+// This passcode shows the initial passcode.
+// Inputs: currentPasscode
+// Outputs: none
+// Side effects: display is set to show the initial passcode
 void displayInitPasscode() {
   Serial.print("Initial passcode: ");
   Serial.println((const char*)currentPasscode);
@@ -239,6 +282,10 @@ void displayInitPasscode() {
   }
 }
 
+// This function displays that the lock was auto-locked.
+// Inputs: none
+// Outputs: none
+// Side effects: display is set to show that the lock was auto-locked.
 void displayAutoLocked() {
   Serial.println("AUTOLOCKING TIMEOUT");
   lcd.clear();
@@ -246,6 +293,10 @@ void displayAutoLocked() {
   lcd.print("AUTO-LOCKING...");
 }
 
+// This function displays that the lock was auto-reset.
+// Inputs: none
+// Outputs: none
+// Side effects: display is set to show that the lock was auto-reset.
 void displayAutoReset() {
   Serial.println("AUTORESET TIMEOUT");
   lcd.clear();
@@ -253,6 +304,10 @@ void displayAutoReset() {
   lcd.print("AUTO-RESETTING...");
 }
 
+// This function display that the lock is locked.
+// Inputs: none
+// Outputs: none
+// Side effects: display is set to show that the lock is locked.
 void displayLocked() {
   Serial.println("LOCKED");
   lcd.clear();
@@ -260,6 +315,10 @@ void displayLocked() {
   lcd.print("LOCKED!");
 }
 
+// This function displays that the lock is unlocked.
+// Inputs: none
+// Outputs: none
+// Side effects: display is set to show that the lock is unlocked.
 void displayUnlocked() {
   Serial.println("UNLOCKED");
   lcd.clear();
@@ -267,6 +326,10 @@ void displayUnlocked() {
   lcd.print("UNLOCKED!");
 }
 
+// This function displays that the user has entered a wrong passcode.
+// Inputs: none
+// Outputs: none
+// Side effects: display is set to show that the user entered a wrong passcode.
 void displayWrongPasscode() {
   Serial.println("WRONG PASSCODE");
   lcd.clear();
@@ -279,6 +342,11 @@ void displayWrongPasscode() {
   }
 }
 
+// This function displays the passcode users are entering in a masked manner
+// so that onlookers cannot see what password they entered.
+// Inputs: none
+// Outputs: none
+// Side effects: display is set to show the masked passcode.
 void displayMaskedPasscode() {
   char* i = enteredPasscode;
   Serial.print("Entered Passcode: ");
@@ -301,6 +369,10 @@ void displayMaskedPasscode() {
   }
 }
 
+// This function displays to the user that the passcode was changed.
+// Inputs: none
+// Outputs: none
+// Side effects: display is set to show that the passcode was changed.
 void displayPasswordChanged() {
   Serial.print("Password changed!");
   Serial.println((const char*)currentPasscode);
@@ -315,6 +387,11 @@ void displayPasswordChanged() {
   }
 }
 
+// This function displays the new passcode the user is setting
+// in plaintext on the LCD display and also to the serial monitor.
+// Inputs: none
+// Outputs: none
+// Side effects: display is set to show the new password being entered.
 void displayEnterNewPasscode() {
   Serial.print("New passcode: ");
   Serial.println((const char*)enteredPasscode);
@@ -333,6 +410,11 @@ void displayEnterNewPasscode() {
   }
 }
 
+// This function dispslays an error message when the user tries to reset
+// the passcode to an empty string
+// Inputs: none
+// Outputs: none
+// Side effects: display is set to show that new passcode cannot be empty
 void displayNewPasswordEmptyError() {
   Serial.print("New passcode cannot be empty!");
 
@@ -347,6 +429,11 @@ void displayNewPasswordEmptyError() {
   }
 }
 
+// This function looks at the button statuses and modifies
+// the entered passcode with the buttons the user had pressed.
+// Inputs: enteredPasscode, enteredPasscodeLength, buttonPressed
+// Outputs: enteredPasscode is updated with button pressed
+// Side effects: none
 void updateEnteredPassword() {
   // Check if the user can still enter buttons
   if (enteredPasscodeLength < maxLength) {
@@ -361,7 +448,12 @@ void updateEnteredPassword() {
   }
 }
 
+// This function enables the timer interrupt caused by TC3
+// Inputs: timerInterruptCount
+// Outputs: timerInterruptCount is set to zero
+// Side effects: enables timer interrupts
 void enableTimeoutTimer() {
+#ifndef TESTING
   timerInterruptCount = 0;
   TC3->COUNT16.INTENCLR.reg |= TC_INTENCLR_MC0;
   TC3->COUNT16.CC[0].reg = 0xffffffff;
@@ -370,19 +462,37 @@ void enableTimeoutTimer() {
   TC3->COUNT16.INTENSET.reg |= TC_INTENSET_MC0;
   while (TC3->COUNT16.STATUS.bit.SYNCBUSY)
     ;  // write-synchronized
+#endif
 }
 
+
+// This function disables the timer interrupt caused by TC3.
+// Inputs: timerInterruptCount
+// Outputs: timerInterruptCount is set to zero
+// Side effects: interrupts are disabled
 void disableTimeoutTimer() {
+#ifndef TESTING
   TC3->COUNT16.INTENCLR.reg |= TC_INTENCLR_MC0;
   timerInterruptCount = 0;
+#endif
 }
 
+// This function uses PWM to set the LED colour
+// Inputs: red, green, and blue values for PWM between 0 and 255
+// Outputs: none
+// Side effects: LED colour is changed
 void setLedColour(int red, int green, int blue) {
   // analogWrite(redLedPin, red);
   analogWrite(blueLedPin, blue);
   analogWrite(greenLedPin, green);
 }
 
+// This function is called by loop() to update the FSM state.
+// This function uses global variables buttonPressed and buttonStatuses and the old state
+// And returns the new state.
+// Inputs: oldState, buttonStatuses, buttonPressed, currentPasscode, enteredPasscode, oldState
+// Outputs: returns the new state
+// Side effects: outputs all functions from the FSM
 State updateFSM(State oldState) {
   switch (oldState) {
     case State::Init:
@@ -390,7 +500,7 @@ State updateFSM(State oldState) {
       setLedColour(0, 0, 255);
       myservo.write(0);
       displayInitPasscode();
-      return State::Locked;
+      return State::Locked; // transition 1-2
     case State::Locked:
       // Turn Servo Motor to lock it
       setLedColour(0, 0, 255);
@@ -398,31 +508,36 @@ State updateFSM(State oldState) {
       lastUnlockedTime = millis();
       lastResetTime = millis();
       displayLocked();
-      return State::WaitForButton;
+      return State::WaitForButton; // transition 2-3
     case State::Unlocked:
       setLedColour(0, 255, 0);
       // Turn Servo Motor
       myservo.write(180);
       if (buttonPressed[buttonLockUnlockPin]) {
         // User presses lock button
+        // transition 4-2(b)
         lockedState = true;
         displayLocked();
         disableTimeoutTimer();
         return State::Locked;
       } else if (buttonPressed[buttonUndoButtonPin]) {
         // User presses undo --> enters reset state
+        // transition 4-5
         lastResetTime = millis();
         disableTimeoutTimer();
         enableTimeoutTimer();
         return State::ResetPasscode;
       } else if (timerInterruptCount >= 4) {
         // Autolock after ~ (8.5*4) = 34 seconds of inactivity
+        // transition 4-2(a)
         lockedState = true;
         displayAutoLocked();
         displayLocked();
         disableTimeoutTimer();
         return State::Locked;
       }
+
+      // transition 4-4
       return State::Unlocked;
     case State::ResetPasscode:
       // User can enter digits for the new passcode
@@ -431,10 +546,9 @@ State updateFSM(State oldState) {
       setLedColour(0, 128, 255);
 
       lastUnlockedTime = millis();
-
       if (buttonPressed[buttonLockUnlockPin]) {
         // User can submit the passcode
-        if (enteredPasscodeLength > 0) {
+        if (enteredPasscodeLength > 0) { // transition 5-2
           // Allow this to be the new passcode
           // Copy the entered passcode to the current passcode
           strcpy(currentPasscode, enteredPasscode);
@@ -445,12 +559,13 @@ State updateFSM(State oldState) {
           displayPasswordChanged();
           disableTimeoutTimer();
           return State::Locked;
-        } else {
+        } else { // transition 5-5(a)
           displayNewPasswordEmptyError();
           enableTimeoutTimer();
           return State::ResetPasscode;
         }
       } else if (buttonPressed[buttonUndoButtonPin]) {
+        // Transition 5-4(b)
         // User can press undo button to exit reset passcode state --> goes to unlocked
         disableTimeoutTimer();
         enteredPasscodeLength = 0;
@@ -460,6 +575,7 @@ State updateFSM(State oldState) {
         enableTimeoutTimer();
         return State::Unlocked;
       } else if (timerInterruptCount >= 4) {
+        // Transition 5-4(a)
         disableTimeoutTimer();
         enteredPasscodeLength = 0;
         memset(enteredPasscode, 0, maxLength + 1);
@@ -468,6 +584,8 @@ State updateFSM(State oldState) {
         enableTimeoutTimer();
         return State::Unlocked;
       }
+
+      // transition 5-5(b)
       return State::ResetPasscode;
     case State::WaitForButton:
       updateEnteredPassword();
@@ -479,6 +597,7 @@ State updateFSM(State oldState) {
         memset(enteredPasscode, 0, maxLength + 1);
         // Check if combination is correct
         if (correctCombination) {
+          // Transition 3-4
           lockedState = false;
           lastUnlockedTime = millis();
           displayUnlocked();
@@ -488,22 +607,28 @@ State updateFSM(State oldState) {
           return State::Unlocked;
         }
         // Incorrect combination
+        // Transition 3-2
         displayWrongPasscode();
         setLedColour(0, 0, 255);
         return State::Locked;
       } else if (buttonPressed[buttonUndoButtonPin]) {
         // Check if there is a passcode entered
+        // Transition 3-3(d)
         if (enteredPasscodeLength > 0) {
           // Remove last entry
           enteredPasscodeLength--;
           enteredPasscode[enteredPasscodeLength] = 0;
         }
       } else if (enteredPasscodeLength == 0) {
+        // Transition 3-3(c)
         setLedColour(0, 0, 255);
         displayLocked();
       } else if (enteredPasscodeLength > 0) {
+        // Transition 3-3(b)
         setLedColour(255, 255, 255);
         displayMaskedPasscode();
+      } else {
+        // Transition 3-3(a)
       }
 
       if (lockedState) {
@@ -517,6 +642,13 @@ State updateFSM(State oldState) {
   }
 }
 
+// This function runs repeatedly, updates the inputs and then runs one 
+// iteration of the FSM to get the new state of the FSM every 50 ms. The
+// function also pets the watchdog to make sure that the watchdog reset
+// never happens when the code is working properly.
+// Inputs: none
+// Outputs: none
+// Side effects: updates FSM to the state returned by updateState.
 void loop() {
   static State state = State::Init;
   petWatchdog();
@@ -525,6 +657,11 @@ void loop() {
   delay(50);
 }
 
+// This function is invoked for the Watchdog Timer early warning.
+// Outputs a warning to the console that the watchdog reset is about to occur.
+// Inputs: none
+// Outputs: none
+// Side effects: clears early warning interrupt, prints warning to serial console
 void WDT_Handler() {
   // Clear interrupt register flag
   // (reference register with WDT->registername.reg)
