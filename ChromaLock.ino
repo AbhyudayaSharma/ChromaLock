@@ -171,6 +171,16 @@ void setupWatchdogTimer() {
 #endif
 }
 
+#ifdef TESTING
+// Runs tests
+// Inputs: none
+// Outputs: none
+// Side effects: none
+void runTests() {
+  // TODO
+}
+#endif
+
 // This function sets every pin to the correct mode, setups Watchdog and TC3 timers,
 // servo motor, and the LCD display.
 // Inputs: none
@@ -203,6 +213,10 @@ void setup() {
 
   setupTimer();
   setupWatchdogTimer();
+
+#ifdef TESTING
+  runTests();
+#endif
 }
 
 // This function is the ISR for the TC3 timer
@@ -500,7 +514,7 @@ State updateFSM(State oldState) {
       setLedColour(0, 0, 255);
       myservo.write(0);
       displayInitPasscode();
-      return State::Locked; // transition 1-2
+      return State::Locked;  // transition 1-2
     case State::Locked:
       // Turn Servo Motor to lock it
       setLedColour(0, 0, 255);
@@ -508,7 +522,7 @@ State updateFSM(State oldState) {
       lastUnlockedTime = millis();
       lastResetTime = millis();
       displayLocked();
-      return State::WaitForButton; // transition 2-3
+      return State::WaitForButton;  // transition 2-3
     case State::Unlocked:
       setLedColour(0, 255, 0);
       // Turn Servo Motor
@@ -548,7 +562,7 @@ State updateFSM(State oldState) {
       lastUnlockedTime = millis();
       if (buttonPressed[buttonLockUnlockPin]) {
         // User can submit the passcode
-        if (enteredPasscodeLength > 0) { // transition 5-2
+        if (enteredPasscodeLength > 0) {  // transition 5-2
           // Allow this to be the new passcode
           // Copy the entered passcode to the current passcode
           strcpy(currentPasscode, enteredPasscode);
@@ -559,7 +573,7 @@ State updateFSM(State oldState) {
           displayPasswordChanged();
           disableTimeoutTimer();
           return State::Locked;
-        } else { // transition 5-5(a)
+        } else {  // transition 5-5(a)
           displayNewPasswordEmptyError();
           enableTimeoutTimer();
           return State::ResetPasscode;
@@ -642,7 +656,7 @@ State updateFSM(State oldState) {
   }
 }
 
-// This function runs repeatedly, updates the inputs and then runs one 
+// This function runs repeatedly, updates the inputs and then runs one
 // iteration of the FSM to get the new state of the FSM every 50 ms. The
 // function also pets the watchdog to make sure that the watchdog reset
 // never happens when the code is working properly.
@@ -650,11 +664,13 @@ State updateFSM(State oldState) {
 // Outputs: none
 // Side effects: updates FSM to the state returned by updateState.
 void loop() {
+#ifndef TESTING
   static State state = State::Init;
   petWatchdog();
   updateInputs();
   state = updateFSM(state);
   delay(50);
+#endif
 }
 
 // This function is invoked for the Watchdog Timer early warning.
