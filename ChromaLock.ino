@@ -109,6 +109,27 @@ constexpr int buttonUndoButtonPin = 11;
 constexpr int rs = A0, en = A1, d4 = A2, d5 = 12, d6 = 13, d7 = 14;
 LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
 
+const int numTests = 20;
+
+/*
+ * A struct to keep all three state inputs in one place
+ */
+typedef struct {
+  bool buttonPressed[12];
+  int buttonStatuses[12];
+} state_inputs;
+
+/*
+ * A struct to keep all 9 state variables in one place
+ */
+typedef struct {
+  int passcodeLength;
+  int enteredPasscodeLength;
+  int timerInterruptCount;
+  char currentPasscode[maxLength + 1];
+  char enteredPasscode[maxLength + 1];
+} state_vars;
+
 // This function setups the TC3 timer
 // Inputs: none
 // Outputs: none
@@ -176,8 +197,93 @@ void setupWatchdogTimer() {
 // Inputs: none
 // Outputs: none
 // Side effects: none
+const State testStatesIn[numTests] = { (State)0, (State)1, (State)2, (State)2, (State)2, (State)2, (State)2, (State)2, (State)2, (State)3, (State)3, (State)3, (State)3, (State)3, (State)4, (State)4, (State)4, (State)4, (State)4, (State)4 };
+const State testStatesOut[numTests] = { (State)1, (State)2, (State)2, (State)1, (State)2, (State)2, (State)2, (State)2, (State)3, (State)3, (State)1, (State)1, (State)3, (State)4, (State)4, (State)3, (State)3, (State)4, (State)4, (State)1 };
+const state_inputs testInputs[numTests] = {
+  { { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+  { { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+  { { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+  { { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+  { { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+  { { 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+  { { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+  { { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+  { { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+  { { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+  { { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+  { { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+  { { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+  { { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+  { { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+  { { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+  { { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+  { { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+  { { 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+  { { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } }
+};
+
+const state_vars testVarsIn[numTests] = {
+  { 4, 0, 0, { '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+  { 4, 0, 0, { '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+  { 4, 0, 0, { '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 }, { '1', '2', '3', 0, 0, 0, 0, 0, 0, 0 } },
+  { 4, 3, 0, { '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 }, { '0', '0', '0', 0, 0, 0, 0, 0, 0, 0 } },
+  { 4, 0, 0, { '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+  { 4, 0, 0, { '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 }, { '0', 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+  { 4, 1, 0, { '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 }, { '0', 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+  { 4, 2, 0, { '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 }, { '0', '0', 0, 0, 0, 0, 0, 0, 0, 0 } },
+  { 4, 4, 0, { '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 }, { '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 } },
+  { 4, 0, 0, { '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+  { 4, 0, 4, { '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+  { 4, 0, 3, { '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+  { 4, 0, 3, { '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+  { 4, 0, 3, { '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+  { 4, 0, 0, { '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+  { 4, 0, 4, { '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+  { 4, 0, 3, { '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+  { 4, 0, 2, { '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+  { 4, 0, 2, { '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+  { 4, 1, 2, { '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 }, { '1', 0, 0, 0, 0, 0, 0, 0, 0, 0 } }
+};
+
+const state_vars testVarsOut[numTests] = {
+  { 4, 0, 0, { '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+  { 4, 0, 0, { '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+  { 4, 0, 0, { '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 }, { '1', '2', '3', 0, 0, 0, 0, 0, 0, 0 } },
+  { 4, 0, 0, { '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+  { 4, 0, 0, { '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+  { 4, 1, 0, { '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 }, { '0', 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+  { 4, 0, 0, { '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+  { 4, 1, 0, { '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 }, { '0', 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+  { 4, 0, 0, { '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+  { 4, 0, 0, { '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+  { 4, 0, 0, { '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+  { 4, 0, 0, { '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+  { 4, 0, 3, { '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+  { 4, 0, 0, { '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+  { 4, 0, 0, { '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+  { 4, 0, 0, { '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+  { 4, 0, 0, { '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+  { 4, 0, 0, { '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+  { 4, 1, 2, { '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 }, { '1', 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+  { 1, 0, 0, { '1', 0, 0, 0, 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } }
+};
+
 void runTests() {
-  // TODO
+  bool allTestsPassed = true;
+  for (int i = 0; i < numTests; i++) {
+    Serial.print("Running test ");
+    Serial.println(i);
+    if (!testTransition(testStatesIn[i], testStatesOut[i], testInputs[i], testVarsIn[i], testVarsOut[i], false)) {
+      allTestsPassed = false;
+      // break;
+    }
+    Serial.println();
+  }
+  if (allTestsPassed) {
+    Serial.println("All tests passed!");
+  } else {
+    Serial.println("Uh oh!");
+  }
 }
 #endif
 
@@ -477,6 +583,9 @@ void enableTimeoutTimer() {
   while (TC3->COUNT16.STATUS.bit.SYNCBUSY)
     ;  // write-synchronized
 #endif
+#ifdef TESTING
+  timerInterruptCount = 0;
+#endif
 }
 
 
@@ -487,6 +596,9 @@ void enableTimeoutTimer() {
 void disableTimeoutTimer() {
 #ifndef TESTING
   TC3->COUNT16.INTENCLR.reg |= TC_INTENCLR_MC0;
+  timerInterruptCount = 0;
+#endif
+#ifdef TESTING
   timerInterruptCount = 0;
 #endif
 }
@@ -685,4 +797,88 @@ void WDT_Handler() {
 
   // Warn user that a watchdog reset may happen
   Serial.println("Warning: Watchdog reset may occur.");
+}
+
+/*        
+ * Helper function for printing states
+ */
+char* s2str(State s) {
+  switch (s) {
+    case Init:
+      return "(1) INIT";
+    case Locked:
+      return "(2) LOCKED";
+    case WaitForButton:
+      return "(3) WAIT_FOR_BUTTON";
+    case Unlocked:
+      return "(4) UNLOCKED";
+    case ResetPasscode:
+      return "(5) RESET_PASSCODE";
+    default:
+      return "???";
+  }
+}
+
+/*
+ * Function to test an individual state transition
+*/
+bool testTransition(State startState,
+                    State endState,
+                    state_inputs testStateInputs,
+                    state_vars startStateVars,
+                    state_vars endStateVars,
+                    bool verbose) {
+
+  memcpy(buttonPressed, testStateInputs.buttonPressed, 12);
+  memcpy(buttonStatuses, testStateInputs.buttonStatuses, 12 * sizeof(*buttonStatuses));
+
+  passcodeLength = startStateVars.passcodeLength;
+  enteredPasscodeLength = startStateVars.enteredPasscodeLength;
+  timerInterruptCount = startStateVars.timerInterruptCount;
+  memcpy(currentPasscode, startStateVars.currentPasscode, maxLength + 1);
+  memcpy(enteredPasscode, startStateVars.enteredPasscode, maxLength + 1);
+
+  State resultState = updateFSM(startState);
+
+  bool passedTest = (endState == resultState and passcodeLength == endStateVars.passcodeLength and enteredPasscodeLength == endStateVars.enteredPasscodeLength and timerInterruptCount == endStateVars.timerInterruptCount and !strcmp(currentPasscode, endStateVars.currentPasscode) and !strcmp(enteredPasscode, endStateVars.enteredPasscode));
+
+  // Verbose logs for testing
+  if (verbose) {
+    Serial.println(endState == resultState);
+    Serial.println(enteredPasscodeLength == endStateVars.enteredPasscodeLength);
+    Serial.println(timerInterruptCount == endStateVars.timerInterruptCount);
+    Serial.println(!strcmp(currentPasscode, endStateVars.currentPasscode));
+    Serial.println(!strcmp(enteredPasscode, endStateVars.enteredPasscode));
+
+    Serial.println("End State: ");
+    Serial.println(endState);
+    Serial.println(resultState);
+
+    Serial.println("Entered Passcode Length: ");
+    Serial.println(enteredPasscodeLength);
+    Serial.println(endStateVars.enteredPasscodeLength);
+
+    Serial.println("Timer Interrupt Count: ");
+    Serial.println(timerInterruptCount);
+    Serial.println(endStateVars.timerInterruptCount);
+
+    Serial.println("Current Passcode: ");
+    Serial.println(currentPasscode);
+    Serial.println(endStateVars.currentPasscode);
+
+    Serial.println("Entered Passcode: ");
+    Serial.println(enteredPasscode);
+    Serial.println(endStateVars.enteredPasscode);
+  }
+
+  char sToPrint[200];
+  if (passedTest) {
+    sprintf(sToPrint, "Test from %s to %s PASSED", s2str(startState), s2str(endState));
+    Serial.println(sToPrint);
+    return true;
+  } else {
+    sprintf(sToPrint, "Test from %s to %s FAILED", s2str(startState), s2str(endState));
+    Serial.println(sToPrint);
+    return false;
+  }
 }
