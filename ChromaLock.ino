@@ -1,11 +1,27 @@
-#include <Servo.h>
 #include <LiquidCrystal.h>
 
 // uncomment the line below to run tests
 // #define TESTING
 
-Servo myservo;
+#ifndef TESTING
+#include <Servo.h>
+#else // Mock for Servo motor
+class Servo {
+public:
+  int pin;
+  int value;
 
+  void attach(int pin) {
+    this->pin = pin;
+  }
+
+  void write(int value) {
+    this->value = value;
+  }
+};
+#endif
+
+Servo myservo;
 constexpr int maxLength = 10;
 int passcodeLength = 4;
 int enteredPasscodeLength = 0;
