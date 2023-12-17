@@ -146,6 +146,14 @@ typedef struct {
   char enteredPasscode[maxLength + 1];
 } state_vars;
 
+/*
+* A struct to keep the 2 output variables in one place during testing
+*/
+typedef struct {
+  int mock_LED;
+  int mock_motor_position;
+} outputs;
+
 // This function looks at the button statuses and modifies
 // the entered passcode with the buttons the user had pressed.
 // Inputs: enteredPasscode, enteredPasscodeLength, buttonPressed
@@ -256,6 +264,10 @@ void setupWatchdogTimer() {
 }
 
 #ifdef TESTING
+
+//LED output mockup: 0 is blue (wrong combo/locked), 1 is green (correct combo/unlocked), 2 is white (wait for button), 3 is teal (reset passcode)
+int mock_LED = 0;
+
 const State testStatesIn[numTests] = { (State)0, (State)1, (State)2, (State)2, (State)2, (State)2, (State)2, (State)2, (State)2, (State)3, (State)3, (State)3, (State)3, (State)3, (State)4, (State)4, (State)4, (State)4, (State)4, (State)4 };
 const State testStatesOut[numTests] = { (State)1, (State)2, (State)2, (State)1, (State)2, (State)2, (State)2, (State)2, (State)3, (State)3, (State)1, (State)1, (State)3, (State)4, (State)4, (State)3, (State)3, (State)4, (State)4, (State)1 };
 const state_inputs testInputs[numTests] = {
@@ -284,7 +296,7 @@ const state_inputs testInputs[numTests] = {
 const state_vars testVarsIn[numTests] = {
   { 4, 0, 0, { '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
   { 4, 0, 0, { '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
-  { 4, 0, 0, { '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 }, { '1', '2', '3', 0, 0, 0, 0, 0, 0, 0 } },
+  { 4, 3, 0, { '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 }, { '1', '2', '3', 0, 0, 0, 0, 0, 0, 0 } },
   { 4, 3, 0, { '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 }, { '0', '0', '0', 0, 0, 0, 0, 0, 0, 0 } },
   { 4, 0, 0, { '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
   { 4, 0, 0, { '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 }, { '0', 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
@@ -307,7 +319,7 @@ const state_vars testVarsIn[numTests] = {
 const state_vars testVarsOut[numTests] = {
   { 4, 0, 0, { '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
   { 4, 0, 0, { '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
-  { 4, 0, 0, { '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 }, { '1', '2', '3', 0, 0, 0, 0, 0, 0, 0 } },
+  { 4, 3, 0, { '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 }, { '1', '2', '3', 0, 0, 0, 0, 0, 0, 0 } },
   { 4, 0, 0, { '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
   { 4, 0, 0, { '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
   { 4, 1, 0, { '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 }, { '0', 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
@@ -327,6 +339,30 @@ const state_vars testVarsOut[numTests] = {
   { 1, 0, 0, { '1', 0, 0, 0, 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } }
 };
 
+const outputs transitionOutputs[numTests] = {
+  { 0, 0 },
+  { 0, 0 },
+  { 2, 0 },
+  { 0, 0 },
+  { 0, 0 },
+  { 2, 0 },
+  { 2, 0 },
+  { 2, 0 },
+  { 1, 180 },
+  { 1, 180 },
+  { 1, 0 },
+  { 1, 0 },
+  { 1, 180 },
+  { 1, 180 },
+  { 3, 180 },
+  { 3, 180 },
+  { 3, 180 },
+  { 3, 180 },
+  { 3, 180 },
+  { 3, 0 }
+
+};
+
 // Runs tests
 // Inputs: none
 // Outputs: none
@@ -336,7 +372,7 @@ void runTests() {
   for (int i = 0; i < numTests; i++) {
     Serial.print("Running test ");
     Serial.println(i);
-    if (!testTransition(testStatesIn[i], testStatesOut[i], testInputs[i], testVarsIn[i], testVarsOut[i], false)) {
+    if (!testTransition(testStatesIn[i], testStatesOut[i], testInputs[i], testVarsIn[i], testVarsOut[i], transitionOutputs[i], false)) {
       allTestsPassed = false;
       // break;
     }
@@ -699,6 +735,26 @@ void setLedColour(int red, int green, int blue) {
   // analogWrite(redLedPin, red);
   analogWrite(blueLedPin, blue);
   analogWrite(greenLedPin, green);
+
+#ifdef TESTING
+
+  //mock LED turns blue for locked/wrong passcode
+  if (green == 0 && blue == 255) {
+    mock_LED = 0;
+  }
+  //mock LED turns green for unlocked/correct passcode
+  else if (blue == 0 && green == 255) {
+    mock_LED = 1;
+  }
+  //mock LED turns teal (blue green combination) for reset passcode
+  else if (!(green == 255 && blue == 255)) {
+    mock_LED = 3;
+  }
+  //mock LED turns white for wait for button
+  else {
+    mock_LED = 2;
+  }
+#endif
 }
 
 // This function is called by loop() to update the FSM state.
@@ -733,6 +789,7 @@ State updateFSM(State oldState) {
         lockedState = true;
         displayLocked();
         disableTimeoutTimer();
+        myservo.write(0);
         return State::Locked;
       } else if (buttonPressed[buttonUndoButtonPin]) {
         // User presses undo --> enters reset state
@@ -748,6 +805,7 @@ State updateFSM(State oldState) {
         displayAutoLocked();
         displayLocked();
         disableTimeoutTimer();
+        myservo.write(0);
         return State::Locked;
       }
 
@@ -772,6 +830,7 @@ State updateFSM(State oldState) {
           // Reset the entered passcode
           displayPasswordChanged();
           disableTimeoutTimer();
+          myservo.write(0);
           return State::Locked;
         } else {  // transition 5-5(a)
           displayNewPasswordEmptyError();
@@ -915,6 +974,7 @@ bool testTransition(State startState,
                     state_inputs testStateInputs,
                     state_vars startStateVars,
                     state_vars endStateVars,
+                    outputs transitionOutputs,
                     bool verbose) {
 
   memcpy(buttonPressed, testStateInputs.buttonPressed, 12);
@@ -930,37 +990,47 @@ bool testTransition(State startState,
 
   bool passedTest = (endState == resultState and passcodeLength == endStateVars.passcodeLength and enteredPasscodeLength == endStateVars.enteredPasscodeLength and timerInterruptCount == endStateVars.timerInterruptCount and !strcmp(currentPasscode, endStateVars.currentPasscode) and !strcmp(enteredPasscode, endStateVars.enteredPasscode));
 
+  bool passedOutput = (mock_LED == transitionOutputs.mock_LED and myservo.value == transitionOutputs.mock_motor_position);
+
   // Verbose logs for testing
   if (verbose) {
-    Serial.println(endState == resultState);
-    Serial.println(enteredPasscodeLength == endStateVars.enteredPasscodeLength);
-    Serial.println(timerInterruptCount == endStateVars.timerInterruptCount);
-    Serial.println(!strcmp(currentPasscode, endStateVars.currentPasscode));
-    Serial.println(!strcmp(enteredPasscode, endStateVars.enteredPasscode));
+    // Serial.println(endState == resultState);
+    // Serial.println(enteredPasscodeLength == endStateVars.enteredPasscodeLength);
+    // Serial.println(timerInterruptCount == endStateVars.timerInterruptCount);
+    // Serial.println(!strcmp(currentPasscode, endStateVars.currentPasscode));
+    // Serial.println(!strcmp(enteredPasscode, endStateVars.enteredPasscode));
 
-    Serial.println("End State: ");
-    Serial.println(endState);
-    Serial.println(resultState);
+    // Serial.println("End State: ");
+    // Serial.println(endState);
+    // Serial.println(resultState);
 
     Serial.println("Entered Passcode Length: ");
     Serial.println(enteredPasscodeLength);
     Serial.println(endStateVars.enteredPasscodeLength);
 
-    Serial.println("Timer Interrupt Count: ");
-    Serial.println(timerInterruptCount);
-    Serial.println(endStateVars.timerInterruptCount);
+    // Serial.println("Timer Interrupt Count: ");
+    // Serial.println(timerInterruptCount);
+    // Serial.println(endStateVars.timerInterruptCount);
 
-    Serial.println("Current Passcode: ");
-    Serial.println(currentPasscode);
-    Serial.println(endStateVars.currentPasscode);
+    // Serial.println("Current Passcode: ");
+    // Serial.println(currentPasscode);
+    // Serial.println(endStateVars.currentPasscode);
 
-    Serial.println("Entered Passcode: ");
-    Serial.println(enteredPasscode);
-    Serial.println(endStateVars.enteredPasscode);
+    // Serial.println("Entered Passcode: ");
+    // Serial.println(enteredPasscode);
+    // Serial.println(endStateVars.enteredPasscode);
+
+    Serial.println("Mock LED State: ");
+    Serial.println(mock_LED);
+    Serial.println(transitionOutputs.mock_LED);
+
+    Serial.println("Mock Motor Pose: ");
+    Serial.println(myservo.value);
+    Serial.println(transitionOutputs.mock_motor_position);
   }
 
   char sToPrint[200];
-  if (passedTest) {
+  if (passedTest and passedOutput) {
     sprintf(sToPrint, "Test from %s to %s PASSED", s2str(startState), s2str(endState));
     Serial.println(sToPrint);
     return true;
