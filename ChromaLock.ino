@@ -1,11 +1,11 @@
 #include <LiquidCrystal.h>
 
 // uncomment the line below to run tests
-// #define TESTING
+#define TESTING
 
 #ifndef TESTING
 #include <Servo.h>
-#else // Mock for Servo motor
+#else  // Mock for Servo motor
 class Servo {
 public:
   int pin;
@@ -146,6 +146,25 @@ typedef struct {
   char enteredPasscode[maxLength + 1];
 } state_vars;
 
+// This function looks at the button statuses and modifies
+// the entered passcode with the buttons the user had pressed.
+// Inputs: enteredPasscode, enteredPasscodeLength, buttonPressed
+// Outputs: enteredPasscode is updated with button pressed
+// Side effects: none
+void updateEnteredPassword() {
+  // Check if the user can still enter buttons
+  if (enteredPasscodeLength < maxLength) {
+    // Iterate over all buttons and check if they are pressed
+    for (int i = 0; i <= 9; i++) {
+      if (buttonPressed[i]) {
+        enteredPasscode[enteredPasscodeLength] = i + '0';
+        enteredPasscode[++enteredPasscodeLength] = 0;
+        break;
+      }
+    }
+  }
+}
+
 // This function setups the TC3 timer
 // Inputs: none
 // Outputs: none
@@ -170,6 +189,34 @@ void setupTimer() {
 
   NVIC_SetPriority(TC3_IRQn, 0);
   NVIC_EnableIRQ(TC3_IRQn);
+#endif
+}
+
+// This function enables the timer interrupt caused by TC3
+// Inputs: timerInterruptCount
+// Outputs: timerInterruptCount is set to zero
+// Side effects: enables timer interrupts
+void enableTimeoutTimer() {
+  timerInterruptCount = 0;
+#ifndef TESTING
+  TC3->COUNT16.INTENCLR.reg |= TC_INTENCLR_MC0;
+  TC3->COUNT16.CC[0].reg = 0xffffffff;
+  TC3->COUNT16.CTRLA.reg = TC_CTRLA_MODE_COUNT16 | TC_CTRLA_WAVEGEN(1) | TC_CTRLA_PRESCALER(7) | TC_CTRLA_PRESCSYNC(1);
+  TC3->COUNT16.CTRLA.reg |= TC_CTRLA_ENABLE;
+  TC3->COUNT16.INTENSET.reg |= TC_INTENSET_MC0;
+  while (TC3->COUNT16.STATUS.bit.SYNCBUSY)
+    ;  // write-synchronized
+#endif
+}
+
+// This function disables the timer interrupt caused by TC3.
+// Inputs: timerInterruptCount
+// Outputs: timerInterruptCount is set to zero
+// Side effects: interrupts are disabled
+void disableTimeoutTimer() {
+  timerInterruptCount = 0;
+#ifndef TESTING
+  TC3->COUNT16.INTENCLR.reg |= TC_INTENCLR_MC0;
 #endif
 }
 
@@ -209,10 +256,6 @@ void setupWatchdogTimer() {
 }
 
 #ifdef TESTING
-// Runs tests
-// Inputs: none
-// Outputs: none
-// Side effects: none
 const State testStatesIn[numTests] = { (State)0, (State)1, (State)2, (State)2, (State)2, (State)2, (State)2, (State)2, (State)2, (State)3, (State)3, (State)3, (State)3, (State)3, (State)4, (State)4, (State)4, (State)4, (State)4, (State)4 };
 const State testStatesOut[numTests] = { (State)1, (State)2, (State)2, (State)1, (State)2, (State)2, (State)2, (State)2, (State)3, (State)3, (State)1, (State)1, (State)3, (State)4, (State)4, (State)3, (State)3, (State)4, (State)4, (State)1 };
 const state_inputs testInputs[numTests] = {
@@ -284,6 +327,10 @@ const state_vars testVarsOut[numTests] = {
   { 1, 0, 0, { '1', 0, 0, 0, 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } }
 };
 
+// Runs tests
+// Inputs: none
+// Outputs: none
+// Side effects: none
 void runTests() {
   bool allTestsPassed = true;
   for (int i = 0; i < numTests; i++) {
@@ -299,6 +346,84 @@ void runTests() {
     Serial.println("All tests passed!");
   } else {
     Serial.println("Uh oh!");
+  }
+}
+
+// Runs tests for helper functions
+// Inputs: none
+// Outputs: none
+// Side effects: none
+void runHelperTests() {
+  Serial.println("\n====== Running Helper Function Tests ======\n");
+  bool allPassed = true;
+
+  // enableTimerTimeout() test
+  timerInterruptCount = 100;
+  enableTimeoutTimer();
+  if (timerInterruptCount != 0) {
+    Serial.println("enableTimeoutTimer test failed");
+    allPassed = false;
+  } else {
+    Serial.println("enableTimeoutTimer test passed");
+  }
+
+  // disableTimerTimeout() test
+  timerInterruptCount = 100;
+  disableTimeoutTimer();
+  if (timerInterruptCount != 0) {
+    Serial.println("disableTimeoutTimer test failed");
+    allPassed = false;
+  } else {
+    Serial.println("disableTimeoutTimer test passed");
+  }
+
+  // updateEnteredPasscode() test
+  enteredPasscodeLength = 3;
+  memset(buttonPressed, 0, 12 * (sizeof *buttonPressed));
+  strcpy(enteredPasscode, "123");
+  buttonPressed[4] = true;
+  updateEnteredPassword();
+  if (strcmp(enteredPasscode, "1234") || enteredPasscodeLength != 4) {
+    Serial.println("updateEnteredPasscode() test failed");
+    Serial.println(enteredPasscode);
+    Serial.println(enteredPasscodeLength);
+    allPassed = false;
+  } else {
+    Serial.println("updateEnteredPasscode() test passed");
+  }
+
+  // updateEnteredPasscode() test 2
+  enteredPasscodeLength = 10;
+  memset(buttonPressed, 0, 12 * (sizeof *buttonPressed));
+  strcpy(enteredPasscode, "0123456789");
+  buttonPressed[6] = true;
+  updateEnteredPassword();
+  if (strcmp(enteredPasscode, "0123456789") || enteredPasscodeLength != 10) {
+    Serial.println("updateEnteredPasscode() test 2 failed");
+    Serial.println(enteredPasscode);
+    Serial.println(enteredPasscodeLength);
+    allPassed = false;
+  } else {
+    Serial.println("updateEnteredPasscode() test 2 passed");
+  }
+
+  // updateEnteredPasscode() test 3
+  enteredPasscodeLength = 0;
+  memset(buttonPressed, 0, 12 * (sizeof *buttonPressed));
+  strcpy(enteredPasscode, "");
+  buttonPressed[9] = true;
+  updateEnteredPassword();
+  if (strcmp(enteredPasscode, "9") || enteredPasscodeLength != 1) {
+    Serial.println("updateEnteredPasscode() test 3 failed");
+    Serial.println(enteredPasscode);
+    Serial.println(enteredPasscodeLength);
+    allPassed = false;
+  } else {
+    Serial.println("updateEnteredPasscode() test 3 passed");
+  }
+
+  if (allPassed) {
+    Serial.println("All helper function tests passed");
   }
 }
 #endif
@@ -338,6 +463,7 @@ void setup() {
 
 #ifdef TESTING
   runTests();
+  runHelperTests();
 #endif
 }
 
@@ -563,60 +689,6 @@ void displayNewPasswordEmptyError() {
     delay(100);
     petWatchdog();
   }
-}
-
-// This function looks at the button statuses and modifies
-// the entered passcode with the buttons the user had pressed.
-// Inputs: enteredPasscode, enteredPasscodeLength, buttonPressed
-// Outputs: enteredPasscode is updated with button pressed
-// Side effects: none
-void updateEnteredPassword() {
-  // Check if the user can still enter buttons
-  if (enteredPasscodeLength < maxLength) {
-    // Iterate over all buttons and check if they are pressed
-    for (int i = 0; i <= 9; i++) {
-      if (buttonPressed[i]) {
-        enteredPasscode[enteredPasscodeLength] = i + '0';
-        enteredPasscodeLength++;
-        break;
-      }
-    }
-  }
-}
-
-// This function enables the timer interrupt caused by TC3
-// Inputs: timerInterruptCount
-// Outputs: timerInterruptCount is set to zero
-// Side effects: enables timer interrupts
-void enableTimeoutTimer() {
-#ifndef TESTING
-  timerInterruptCount = 0;
-  TC3->COUNT16.INTENCLR.reg |= TC_INTENCLR_MC0;
-  TC3->COUNT16.CC[0].reg = 0xffffffff;
-  TC3->COUNT16.CTRLA.reg = TC_CTRLA_MODE_COUNT16 | TC_CTRLA_WAVEGEN(1) | TC_CTRLA_PRESCALER(7) | TC_CTRLA_PRESCSYNC(1);
-  TC3->COUNT16.CTRLA.reg |= TC_CTRLA_ENABLE;
-  TC3->COUNT16.INTENSET.reg |= TC_INTENSET_MC0;
-  while (TC3->COUNT16.STATUS.bit.SYNCBUSY)
-    ;  // write-synchronized
-#endif
-#ifdef TESTING
-  timerInterruptCount = 0;
-#endif
-}
-
-
-// This function disables the timer interrupt caused by TC3.
-// Inputs: timerInterruptCount
-// Outputs: timerInterruptCount is set to zero
-// Side effects: interrupts are disabled
-void disableTimeoutTimer() {
-#ifndef TESTING
-  TC3->COUNT16.INTENCLR.reg |= TC_INTENCLR_MC0;
-  timerInterruptCount = 0;
-#endif
-#ifdef TESTING
-  timerInterruptCount = 0;
-#endif
 }
 
 // This function uses PWM to set the LED colour
