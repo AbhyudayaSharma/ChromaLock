@@ -1,7 +1,7 @@
 #include <LiquidCrystal.h>
 
 // uncomment the line below to run tests
-#define TESTING
+// #define TESTING
 
 #ifndef TESTING
 #include <Servo.h>
@@ -265,7 +265,7 @@ void setupWatchdogTimer() {
 
 #ifdef TESTING
 
-//LED output mockup: 0 is blue (wrong combo/locked), 1 is green (correct combo/unlocked), 2 is white (wait for button), 3 is teal (reset passcode)
+// LED output mockup: 0 is blue (wrong combo/locked), 1 is green (correct combo/unlocked), 2 is white (wait for button), 3 is teal (reset passcode)
 int mock_LED = 0;
 
 const State testStatesIn[numTests] = { (State)0, (State)1, (State)2, (State)2, (State)2, (State)2, (State)2, (State)2, (State)2, (State)3, (State)3, (State)3, (State)3, (State)3, (State)4, (State)4, (State)4, (State)4, (State)4, (State)4 };
@@ -738,19 +738,19 @@ void setLedColour(int red, int green, int blue) {
 
 #ifdef TESTING
 
-  //mock LED turns blue for locked/wrong passcode
+  // mock LED turns blue for locked/wrong passcode
   if (green == 0 && blue == 255) {
     mock_LED = 0;
   }
-  //mock LED turns green for unlocked/correct passcode
+  // mock LED turns green for unlocked/correct passcode
   else if (blue == 0 && green == 255) {
     mock_LED = 1;
   }
-  //mock LED turns teal (blue green combination) for reset passcode
+  // mock LED turns teal (blue green combination) for reset passcode
   else if (!(green == 255 && blue == 255)) {
     mock_LED = 3;
   }
-  //mock LED turns white for wait for button
+  // mock LED turns white for wait for button
   else {
     mock_LED = 2;
   }
@@ -994,31 +994,31 @@ bool testTransition(State startState,
 
   // Verbose logs for testing
   if (verbose) {
-    // Serial.println(endState == resultState);
-    // Serial.println(enteredPasscodeLength == endStateVars.enteredPasscodeLength);
-    // Serial.println(timerInterruptCount == endStateVars.timerInterruptCount);
-    // Serial.println(!strcmp(currentPasscode, endStateVars.currentPasscode));
-    // Serial.println(!strcmp(enteredPasscode, endStateVars.enteredPasscode));
+    Serial.println(endState == resultState);
+    Serial.println(enteredPasscodeLength == endStateVars.enteredPasscodeLength);
+    Serial.println(timerInterruptCount == endStateVars.timerInterruptCount);
+    Serial.println(!strcmp(currentPasscode, endStateVars.currentPasscode));
+    Serial.println(!strcmp(enteredPasscode, endStateVars.enteredPasscode));
 
-    // Serial.println("End State: ");
-    // Serial.println(endState);
-    // Serial.println(resultState);
+    Serial.println("End State: ");
+    Serial.println(endState);
+    Serial.println(resultState);
 
     Serial.println("Entered Passcode Length: ");
     Serial.println(enteredPasscodeLength);
     Serial.println(endStateVars.enteredPasscodeLength);
 
-    // Serial.println("Timer Interrupt Count: ");
-    // Serial.println(timerInterruptCount);
-    // Serial.println(endStateVars.timerInterruptCount);
+    Serial.println("Timer Interrupt Count: ");
+    Serial.println(timerInterruptCount);
+    Serial.println(endStateVars.timerInterruptCount);
 
-    // Serial.println("Current Passcode: ");
-    // Serial.println(currentPasscode);
-    // Serial.println(endStateVars.currentPasscode);
+    Serial.println("Current Passcode: ");
+    Serial.println(currentPasscode);
+    Serial.println(endStateVars.currentPasscode);
 
-    // Serial.println("Entered Passcode: ");
-    // Serial.println(enteredPasscode);
-    // Serial.println(endStateVars.enteredPasscode);
+    Serial.println("Entered Passcode: ");
+    Serial.println(enteredPasscode);
+    Serial.println(endStateVars.enteredPasscode);
 
     Serial.println("Mock LED State: ");
     Serial.println(mock_LED);
